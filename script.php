@@ -79,14 +79,14 @@ do {
         $categories = [];
         if (isset($page['categories'])) {
             foreach ($page['categories'] as $category) {
-                $categories[] = $category['title'];
+                $categories[] = str_replace( [ 'קטגוריה:', '_'], [ '', ' ' ], $category['title'] );
             }
         }
 
         $articleType = $page['pageprops']['ArticleType'] ?? 'unknown';
         $articleContentArea = $page['pageprops']['ArticleContentArea'] ?? 'unknown';
 
-        fputcsv($csvFile, [$page['title'], $page['fullurl'], $articleType, $articleContentArea, trim( $summary ), trim( $mainContent ), implode(',', $categories)]);
+        fputcsv($csvFile, [$page['title'], $page['fullurl'], $articleType, $articleContentArea, trim( $summary ), trim( $mainContent ), implode(PHP_EOL, $categories)]);
     }
 } while ($continueParam !== null);
 
