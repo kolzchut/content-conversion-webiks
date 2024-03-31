@@ -1,5 +1,7 @@
 {
     "require": {
-        "symfony/css-selector": "^6.4"
+        "symfony/css-selector": "^6.4",
+      "ext-dom": "*",
+      "ext-libxml": "*"
     }
 }
