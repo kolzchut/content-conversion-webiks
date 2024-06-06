@@ -254,6 +254,8 @@ do {
         $pageContent = $pageData['text'];
         $categories = $pageData['categories'];
 
+        // Remove comments before further processing using DOM
+        $pageContent = preg_replace('/<!--[\s\S]*?-->/', '', $pageContent);
         $dom = getDomDocumentFromFragment( $pageContent );
 
         // Extract the summary content
