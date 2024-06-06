@@ -245,6 +245,11 @@ do {
 
     foreach ( $data['query']['pages'] as $page ) {
 
+        // Ignore non-Hebrew pages
+        if ( $page['pagelanguage'] !== 'he' ) {
+            continue;
+        };
+
         $pageData = getParsedPage( $page['pageid'] );
         $pageContent = $pageData['text'];
         $categories = $pageData['categories'];
