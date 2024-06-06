@@ -19,10 +19,24 @@ const NO_SSL_CERT = false;
  */
 function convertHtmlToText(string $html ): string
 {
-    // Strip everything but links
+    // Strip everything but links, which we will re-format
     $text = strip_tags( $html, '<a>' );
+    $text = reformatEmailAndPhoneLinks( $text );
     $text = reformatLinks( $text );
+    // Now strip the remaining tags, because who knows what's left
+    $text = strip_tags( $text );
     return trim( $text );
+}
+
+/**
+ * Reformat '<a href="mailto:{email}">{email}</a>' links to ({email}).
+ * This is a special case, where the text of the link is the email address itself.
+ *
+ * @param string $html The HTML string to search.
+ * @return string the re-formatted text
+ */
+function reformatEmailAndPhoneLinks(string $html ) : string {
+    return preg_replace( '/<a\s+.*?href="(?:mailto|tel):([^"]+)"[^>]*>\1<\/a>/i', '(\1)', $html );
 }
 
 /**
@@ -32,11 +46,12 @@ function convertHtmlToText(string $html ): string
  * @return string the re-formatted text
  */
 function reformatLinks( string $html ): string {
-   return preg_replace_callback('/<a\s+.*?href="(https?:\/\/[^"]+)"[^>]*>([^<]*)<\/a>/i', 'reformatLinksCallback', $html );
+   return preg_replace_callback('/<a\s+.*?href="([^"]+)"[^>]*>([^<]*)<\/a>/i', 'reformatLinksCallback', $html );
 }
 
 function reformatLinksCallback( $matches ): string {
-    return $matches[2] . '(' . urldecode( $matches[1] ) . ')';
+    $url = str_replace( 'mailto:', '', $matches[1] );
+    return $matches[2] . ' (' . urldecode( $url ) . ')';
 }
 
 /**
