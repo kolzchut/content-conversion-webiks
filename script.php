@@ -66,7 +66,7 @@ function getDomDocumentFromFragment( string $html ): DOMDocument {
     $dom->preserveWhiteSpace = true;
     // Unicode-compatibility - see:
     // https://stackoverflow.com/questions/8218230/php-domdocument-loadhtml-not-encoding-utf-8-correctly
-    $dom->loadHTML( '<?xml encoding="utf-8" ?>' . $html );
+    $dom->loadHTML( '<?xml encoding="utf-8" ?>' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
 
     return $dom;
 }
