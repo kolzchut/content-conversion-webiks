@@ -186,11 +186,11 @@ do {
     }
 
     $data = json_decode($response, true);
-    if ( isset($data['continue'] ) ) {
-        $params += $data['continue'];
+    if ( isset($data['continue']['gapcontinue'] ) ) {
+        $params['gapcontinue'] = $data['continue']['gapcontinue'];
     }
 
-    echo ( 'Got ' . count( $data['query']['pages'] ) . ' pages' . ( isset( $data['continue'] ) ? ', not last batch' : '' ) . ":\n" );
+    echo ( 'Got ' . count( $data['query']['pages'] ) . ' pages' . ( isset( $data['continue']['gapcontinue'] ) ? ', not last batch' : '' ) . ":\n" );
 
     foreach ( $data['query']['pages'] as $page ) {
         $pageContent = file_get_contents( $page['fullurl'] . '?action=render');
