@@ -71,6 +71,15 @@ function getDomDocumentFromFragment( string $html ): DOMDocument {
     return $dom;
 }
 
+function removeEmptyElements( DOMDocument $dom ) {
+    $xpath = new \DOMXPath( $dom );
+    while (($node_list = $xpath->query('//*[not(*) and not(@*) and not(text()[normalize-space()])]')) && $node_list->length) {
+        foreach ( $node_list as $node ) {
+            $node->parentNode->removeChild( $node );
+        }
+    }
+}
+
 /**
  * Get the content (including child elements) of an element identified by a CSS selector.
  *
@@ -137,6 +146,46 @@ function getReadableArticleTypeFromCode( ?string $code ): string {
     return $codesMap[$code] ?? 'unknown';
 }
 
+function getParsedPage( int $pageId ) {
+    $params = [
+        'action' => 'parse',
+        'pageid' => $pageId,
+        'disablelimitreport' => 1,
+        'disableeditsection' => 1,
+        'disabletoc' => 1,
+        'prop' => 'text|categories|properties',
+        'format' => 'json',
+        'formatversion' => 2
+    ];
+
+    $response = file_get_contents(API_URL . '?' . http_build_query($params) );
+
+    if ( !$response ) {
+        $error = error_get_last();
+        echo "HTTP request failed. Error was: " . $error['message'];
+        return false;
+    }
+
+    $data = json_decode( $response, true );
+
+    return [
+        'text' => $data['parse']['text'],
+        'categories' => getOnlyVisibleCategories( $data['parse']['categories'] ?? [] ),
+        'properties' => $data['parse']['properties'] ?? []
+    ];
+}
+
+function getOnlyVisibleCategories( $categories ) {
+    $visibleCategories = [];
+    foreach ( $categories as $category => $props ) {
+        if ( !isset( $props['hidden'] ) ) {
+            $visibleCategories[] = str_replace( '_', ' ', $props['category'] );
+        }
+    }
+
+    return $visibleCategories;
+}
+
 // Set the MediaWiki API endpoint
 $baseUrl = 'https://local.dev.wikirights.org.il';
 $apiUrl = $baseUrl . '/w/he/api.php';
@@ -161,18 +210,20 @@ $params = [
     'gaplimit' => BATCH_SIZE,
     'gapfilterredir' => 'nonredirects',
     'gapnamespace' => '0', // Main namespace
-    'prop' => 'info|categories|pageprops', // Include categories and page info
+    'prop' => 'info',
     'inprop' => 'url',
-    'clshow' => '!hidden',
-    'cllimit' => 'max',
     'format' => 'json',
     'formatversion' => 2
 ];
 
+if ( START_FROM ) {
+    $params['gapfrom'] = START_FROM;
+}
+
 
 // Initialize the CSV file
-$csvFile = fopen( 'wiki_pages.csv', 'w' );
-fputcsv( $csvFile, ['כותרת הדף', 'URL', 'סוג ערך', 'תחום תוכן ראשי', 'תקציר', 'תוכן', 'קטגוריות'] );
+$csvFile = fopen( 'wiki_pages.' . date('Ymd\THis') . '.csv', 'w' );
+fputcsv( $csvFile, [ 'id', 'כותרת הדף', 'URL', 'סוג ערך', 'תחום תוכן ראשי', 'תקציר', 'תוכן', 'תוכן HTML', 'קטגוריות'] );
 
 // Make the API request and retrieve pages
 $continueParam = null;
@@ -193,7 +244,11 @@ do {
     echo ( 'Got ' . count( $data['query']['pages'] ) . ' pages' . ( isset( $data['continue']['gapcontinue'] ) ? ', not last batch' : '' ) . ":\n" );
 
     foreach ( $data['query']['pages'] as $page ) {
-        $pageContent = file_get_contents( $page['fullurl'] . '?action=render');
+
+        $pageData = getParsedPage( $page['pageid'] );
+        $pageContent = $pageData['text'];
+        $categories = $pageData['categories'];
+
         $dom = getDomDocumentFromFragment( $pageContent );
 
         // Extract the summary content
@@ -206,29 +261,29 @@ do {
         // Remove other useless elements
         removeElementsBySelector( $dom, '.toc-box' );
 
+        // Remove maps - rare, probably only a single page, but still annoying
+        removeElementsBySelector( $dom, '.maps-map' );
+
+        removeEmptyElements( $dom );
 
         // Extract the main content
-        $mainContent = $dom->saveHTML();
-        $mainContent = convertHtmlToText( html_entity_decode($mainContent, ENT_COMPAT | ENT_HTML401, 'UTF-8') );
+        $processedHtml = $dom->saveHTML();
+        $processedHtml = html_entity_decode($processedHtml, ENT_COMPAT | ENT_HTML401, 'UTF-8');
+        $mainContent = convertHtmlToText( $processedHtml );
 
-
-        $categories = [];
-        if (isset($page['categories'])) {
-            foreach ($page['categories'] as $category) {
-                $categories[] = str_replace( [ 'קטגוריה:', '_'], [ '', ' ' ], $category['title'] );
-            }
-        }
-
-        $articleType = getReadableArticleTypeFromCode( $page['pageprops']['ArticleType'] );
-        $articleContentArea = $page['pageprops']['ArticleContentArea'] ?? 'unknown';
+        $articleType = $pageData['properties']['ArticleType'] ?? null;
+        $articleType = getReadableArticleTypeFromCode( $articleType );
+        $articleContentArea = $pageData['properties']['ArticleContentArea'] ?? 'unknown';
 
         fputcsv( $csvFile, [
+            $page['pageid'],
             $page['title'],
-            $page['fullurl'],
+            urldecode( $page['fullurl'] ),
             $articleType,
             $articleContentArea,
             trim( $summary ),
             trim( $mainContent ),
+            trim( $processedHtml ),
             implode(PHP_EOL, $categories)
         ] );
 
@@ -239,4 +294,4 @@ do {
     }
 } while ( isset( $data['continue'] ) );
 
-fclose($csvFile);
+fclose( $csvFile );
